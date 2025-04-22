@@ -46,13 +46,13 @@ list(
 
   # Comment these lines out if running from raw data
 
-  # tar_target(k_data, read.csv('./Public-Data/k_data.csv')),
-  # tar_target(k_data_relatedness, read.csv('./Public-Data/k_data_relatedness.csv')),
-  # tar_target(k_data_unks_included, read.csv('./Public-Data/k_data.csv')),
-  # 
-  # tar_target(k_data_mm, read.csv('./Public-Data/k_data_mm.csv')),
-  # tar_target(k_data_ff, read.csv('./Public-Data/k_data_ff.csv')),
-  # tar_target(k_data_fm, read.csv('./Public-Data/k_data_fm.csv')),
+  tar_target(k_data, read.csv('./Public-Data/k_data.csv')),
+  tar_target(k_data_relatedness, read.csv('./Public-Data/k_data_relatedness.csv')),
+  tar_target(k_data_unks_included, read.csv('./Public-Data/k_data.csv')),
+
+  tar_target(k_data_mm, read.csv('./Public-Data/k_data_mm.csv')),
+  tar_target(k_data_ff, read.csv('./Public-Data/k_data_ff.csv')),
+  tar_target(k_data_fm, read.csv('./Public-Data/k_data_fm.csv')),
   
   
   # #######################################################################
@@ -214,135 +214,135 @@ list(
   # tar_target(k_data_relatedness_unks_included, merge(k_data_unks_included, relatedness[,c('wang','wang.low','wang.high','dyad'),], by='dyad')),
   # 
   # 
-  # # Relatedness models
-  # 
-  # tar_target(mk_rel_all, brm(
-  #   formula = likely.k ~ wang + (1| mm(A, B)),
-  #   data = k_data_relatedness_unks_included[,,],
-  #   family = categorical(link=logit),
-  #   warmup = 2000,
-  #   iter = 4000,
-  #   chains=4,
-  #   cores=4,
-  #   control = list(adapt_delta = 0.99))),
-  # 
-  # tar_target(mk_rel_mm, brm(
-  #   formula = likely.k ~ wang + (1| mm(A, B)),
-  #   data = k_data_relatedness[.id==1,,],
-  #   family = categorical(link=logit),
-  #   warmup = 2000,
-  #   iter = 4000,
-  #   chains=4,
-  #   cores=4,
-  #   control = list(adapt_delta = 0.95))),
-  # 
-  # tar_target(mk_rel_fm, brm(
-  #   formula = likely.k ~ wang + (1| mm(A, B)),
-  #   data = k_data_relatedness[.id==2,,],
-  #   family = categorical(link=logit),
-  #   warmup = 2000,
-  #   iter = 4000,
-  #   chains=4,
-  #   cores=4,
-  #   control = list(adapt_delta = 0.99))),
-  # 
-  # tar_target(mk_rel_ff, brm(
-  #   formula = likely.k ~ wang + (1| mm(A, B)),
-  #   data = k_data_relatedness[.id==3,,],
-  #   family = categorical(link=logit),
-  #   warmup = 2000,
-  #   iter = 4000,
-  #   chains=4,
-  #   cores=4,
-  #   control = list(adapt_delta = 0.95))),
-  # 
-  # 
-  # # Age difference models
-  # 
-  # tar_target(mk_Age_all, brm(
-  #   formula = likely.k ~ ageDiff + (1| mm(A, B)),
-  #   data = k_data_unks_included,
-  #   family = categorical(link=logit),
-  #   warmup = 2000,
-  #   iter = 4000,
-  #   chains=4,
-  #   cores=4,
-  # )),
-  # 
-  # tar_target(mk_Age_mm, brm(
-  #   formula = likely.k ~ ageDiff + (1| mm(A, B)),
-  #   data = k_data_mm,
-  #   family = categorical(link=logit),
-  #   warmup = 2000,
-  #   iter = 4000,
-  #   chains=4,
-  #   cores=4,
-  # )),
-  # 
-  # tar_target(mk_Age_fm, brm(
-  #   formula = likely.k ~ ageDiff + (1| mm(A, B)),
-  #   data = k_data_fm,
-  #   family = categorical(link=logit),
-  #   warmup = 2000,
-  #   iter = 4000,
-  #   chains=4,
-  #   cores=4,
-  # )),
-  # 
-  # tar_target(mk_Age_ff, brm(
-  #   formula = likely.k ~ ageDiff + (1| mm(A, B)),
-  #   data = k_data_ff,
-  #   family = categorical(link=logit),
-  #   warmup = 2000,
-  #   iter = 4000,
-  #   chains=4,
-  #   cores=4,
-  # )),
-  # 
-  # 
-  # # Residency models
-  # 
-  # tar_target(mk_res_all, brm(
-  #   formula = likely.k ~ dyadicResidency + (1| mm(A, B)),
-  #   data = k_data_unks_included[dRes %in% c('R-R','R-T','T-T'),,],
-  #   family = categorical(link=logit),
-  #   warmup = 2000,
-  #   iter = 4000,
-  #   chains=4,
-  #   cores=4,
-  # )),
-  # 
-  # tar_target(mk_res_mm, brm(
-  #   formula = likely.k ~ dyadicResidency + (1| mm(A, B)),
-  #   data = k_data_mm[dRes %in% c('R-R','R-T','T-T'),,],
-  #   family = categorical(link=logit),
-  #   warmup = 2000,
-  #   iter = 4000,
-  #   chains=4,
-  #   cores=4,
-  # )),
-  # 
-  # tar_target(mk_res_fm, brm(
-  #   formula = likely.k ~ dyadicResidency + (1| mm(A, B)),
-  #   data = k_data_fm[dRes %in% c('R-R','R-T','T-T'),,],
-  #   family = categorical(link=logit),
-  #   warmup = 2000,
-  #   iter = 4000,
-  #   chains=4,
-  #   cores=4,
-  # )),
-  # 
-  # tar_target(mk_res_ff, brm(
-  #   formula = likely.k ~ dyadicResidency + (1| mm(A, B)),
-  #   data = k_data_ff[dRes %in% c('R-R','R-T','T-T'),,],
-  #   family = categorical(link=logit),
-  #   warmup = 2000,
-  #   iter = 4000,
-  #   chains=4,
-  #   cores=4,
-  # )),
-  # 
-  # 
+  # Relatedness models
+
+  tar_target(mk_rel_all, brm(
+    formula = likely.k ~ wang + (1| mm(A, B)),
+    data = k_data_relatedness_unks_included[,,],
+    family = categorical(link=logit),
+    warmup = 2000,
+    iter = 4000,
+    chains=4,
+    cores=4,
+    control = list(adapt_delta = 0.99))),
+
+  tar_target(mk_rel_mm, brm(
+    formula = likely.k ~ wang + (1| mm(A, B)),
+    data = k_data_relatedness[.id==1,,],
+    family = categorical(link=logit),
+    warmup = 2000,
+    iter = 4000,
+    chains=4,
+    cores=4,
+    control = list(adapt_delta = 0.95))),
+
+  tar_target(mk_rel_fm, brm(
+    formula = likely.k ~ wang + (1| mm(A, B)),
+    data = k_data_relatedness[.id==2,,],
+    family = categorical(link=logit),
+    warmup = 2000,
+    iter = 4000,
+    chains=4,
+    cores=4,
+    control = list(adapt_delta = 0.99))),
+
+  tar_target(mk_rel_ff, brm(
+    formula = likely.k ~ wang + (1| mm(A, B)),
+    data = k_data_relatedness[.id==3,,],
+    family = categorical(link=logit),
+    warmup = 2000,
+    iter = 4000,
+    chains=4,
+    cores=4,
+    control = list(adapt_delta = 0.95))),
+
+
+  # Age difference models
+
+  tar_target(mk_Age_all, brm(
+    formula = likely.k ~ ageDiff + (1| mm(A, B)),
+    data = k_data_unks_included,
+    family = categorical(link=logit),
+    warmup = 2000,
+    iter = 4000,
+    chains=4,
+    cores=4,
+  )),
+
+  tar_target(mk_Age_mm, brm(
+    formula = likely.k ~ ageDiff + (1| mm(A, B)),
+    data = k_data_mm,
+    family = categorical(link=logit),
+    warmup = 2000,
+    iter = 4000,
+    chains=4,
+    cores=4,
+  )),
+
+  tar_target(mk_Age_fm, brm(
+    formula = likely.k ~ ageDiff + (1| mm(A, B)),
+    data = k_data_fm,
+    family = categorical(link=logit),
+    warmup = 2000,
+    iter = 4000,
+    chains=4,
+    cores=4,
+  )),
+
+  tar_target(mk_Age_ff, brm(
+    formula = likely.k ~ ageDiff + (1| mm(A, B)),
+    data = k_data_ff,
+    family = categorical(link=logit),
+    warmup = 2000,
+    iter = 4000,
+    chains=4,
+    cores=4,
+  )),
+
+
+  # Residency models
+
+  tar_target(mk_res_all, brm(
+    formula = likely.k ~ dyadicResidency + (1| mm(A, B)),
+    data = k_data_unks_included[dRes %in% c('R-R','R-T','T-T'),,],
+    family = categorical(link=logit),
+    warmup = 2000,
+    iter = 4000,
+    chains=4,
+    cores=4,
+  )),
+
+  tar_target(mk_res_mm, brm(
+    formula = likely.k ~ dyadicResidency + (1| mm(A, B)),
+    data = k_data_mm[dRes %in% c('R-R','R-T','T-T'),,],
+    family = categorical(link=logit),
+    warmup = 2000,
+    iter = 4000,
+    chains=4,
+    cores=4,
+  )),
+
+  tar_target(mk_res_fm, brm(
+    formula = likely.k ~ dyadicResidency + (1| mm(A, B)),
+    data = k_data_fm[dRes %in% c('R-R','R-T','T-T'),,],
+    family = categorical(link=logit),
+    warmup = 2000,
+    iter = 4000,
+    chains=4,
+    cores=4,
+  )),
+
+  tar_target(mk_res_ff, brm(
+    formula = likely.k ~ dyadicResidency + (1| mm(A, B)),
+    data = k_data_ff[dRes %in% c('R-R','R-T','T-T'),,],
+    family = categorical(link=logit),
+    warmup = 2000,
+    iter = 4000,
+    chains=4,
+    cores=4,
+  ))
+
+
   # #######################################################################
   # ## SOCPROG
   # 
@@ -515,16 +515,16 @@ list(
   #######################################################################
   ## Write supplement
 
-  tar_quarto(
-    supplement,
-    file.path('Manuscript','Supplement_BottlenoseRelationships.qmd')),
+  # tar_quarto(
+  #   supplement,
+  #   file.path('Manuscript','Supplement_BottlenoseRelationships.qmd')),
 
 
   #######################################################################
   ## Write manuscript
 
-  tar_quarto(
-    paper,
-    file.path('Manuscript','MS_BottlenoseRelationships.qmd'))
+  # tar_quarto(
+  #   paper,
+  #   file.path('Manuscript','MS_BottlenoseRelationships.qmd'))
   
 )
