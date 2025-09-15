@@ -29,6 +29,7 @@ suppressPackageStartupMessages({
   library(igraph)
   library(scales)   
   library(ggsankey)
+  library(posterior)
   
   # Turn these off for supercomputer
   library(rbbt)

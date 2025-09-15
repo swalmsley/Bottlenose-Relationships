@@ -7,13 +7,13 @@ tar_source('R') # will do all in 'R' folder
 # Seed
 tar_option_set(seed = 1234)
 
-# Configuration - reduce uploads to cloud for improved efficiency 
-# tar_config_set(seconds_meta_append = 15,
-#                seconds_meta_upload = 15,
-#                seconds_reporter = 0.5)
+# Configuration - reduce uploads to cloud for improved efficiency
+tar_config_set(seconds_meta_append = 15,
+               seconds_meta_upload = 15,
+               seconds_reporter = 0.5)
 
 # Variables
-# suppressMessages(set_cmdstan_path(path='C:/Users/sjfwa/AppData/Local/R/cmdstan-2.33.1')) # cmdstan path for local machine
+suppressMessages(set_cmdstan_path(path='C:/Users/sjfwa/AppData/Local/R/cmdstan-2.33.1')) # cmdstan path for local machine
 # cmdstanr::set_cmdstan_path('/home/sjfw/.cmdstan/cmdstan-2.36.0') # path for supercomputer
 
 
@@ -46,7 +46,7 @@ list(
 
   # Comment these lines out if running from raw data
 
-  tar_target(k_data, read.csv('./Public-Data/k_data.csv')),
+  # tar_target(k_data, read.csv('./Public-Data/k_data.csv')),
   tar_target(k_data_relatedness, read.csv('./Public-Data/k_data_relatedness.csv')),
   tar_target(k_data_unks_included, read.csv('./Public-Data/k_data.csv')),
 
@@ -57,7 +57,7 @@ list(
   
   # #######################################################################
   # ## Read in data
-  # tar_target(raw_photoData, read_data_excel('./input/LV_SS_Master_1988-2023_excel.xlsx')),
+  # tar_target(raw_photoData, read_data_excel('./input/LV_SS_Primary_1988-2024.xlsx')),
   # 
   # # process photo data
   # tar_target(side, process_photoID(raw_photoData, 'Left', 'Gully')), # only left-sided photos from the Gully
@@ -88,21 +88,33 @@ list(
   # tar_target(group_associations_no_demo_restriction, build_group_associations(group_df_all_old)),
   # tar_target(group_associations_no_demo_restriction_day, merge(group_associations_no_demo_restriction, unique(group_df_all_old[,.(group_ID=myGroups, day=as.Date(groupTime))]), by='group_ID', all.X=TRUE)),
   # tar_target(group_associations_demo, overlappingIDs(group_associations_no_demo_restriction_day, nbw_meta_raw)),
+  # tar_target(group_associations_demo_aggregated, aggregate_group_associations_demo(group_associations_demo)),
   # 
-  # # run edge weight models for full left-sided dataset
-  # tar_target(brms_fit_group, brm(
-  #   formula = together ~ (1|dyad),
-  #   data = group_associations_demo,
-  #   family = bernoulli(),
-  #   prior = c(
-  #     set_prior("normal(-1.5, 1)", class = "Intercept"),
-  #     set_prior("normal(0, 1)", class = "sd", group = "dyad", coef = "Intercept")),
-  #   chains=4,
-  #   cores=4)),
   # 
-  # # extract edges
-  # tar_target(edges_group, edge_list(brms_fit_group, include_zeros=TRUE)),
-  # tar_target(edges_group_nz, edge_list(brms_fit_group, include_zeros=FALSE)),
+  # # # run edge weight models for full left-sided dataset
+  # tar_target(
+  #   brms_fit_group_aggregated,
+  #   brm(
+  #     sum_together | trials(sum_opps) ~ 1 + (1 | dyad),
+  #     data    = group_associations_demo_aggregated,
+  #     family  = binomial(),
+  #     prior   = c(
+  #       prior(normal(-1.5, 1), class = "Intercept"),
+  #       prior(exponential(1),   class = "sd", group = "dyad")
+  #     ),
+  #     chains  = 4, cores = 4,
+  #     control = list(adapt_delta = 0.9)
+  #   )
+  # ),
+  # 
+  # 
+  # # # extract edges
+  # # tar_target(edges_group, edge_list(brms_fit_group, include_zeros=TRUE)),
+  # # tar_target(edges_group_nz, edge_list(brms_fit_group, include_zeros=FALSE)),
+  # 
+  # # August 2025 edit
+  # tar_target(edges_group, edge_list_agg(brms_fit_group_aggregated, include_zeros=TRUE)),
+  # tar_target(edges_group_nz, edge_list_agg(brms_fit_group_aggregated, include_zeros=FALSE)),
   # 
   # # add metadata: sex, age differences, residency combinations
   # tar_target(edges_sex_group, edge_sex(edges_group, nbw_meta_raw)),
@@ -131,21 +143,23 @@ list(
   # tar_target(group_associations_all, unlist_group_associations(group_associations)),
   # tar_target(group_associations_all_aggregated, aggregate_group_associations(group_associations_all)), # aggregated version just useful for summaries
   # 
+  # # Do an aggregated version for efficiency
   # # Run edge weight models using multi-annual network structure
-  # tar_target(brms_fit_group_multiAnnual, brm(
-  #   formula = together ~ (1|dyad_annual),
-  #   data = group_associations_all,
-  #   family = bernoulli(),
-  #   prior = c(
-  #     set_prior("normal(-1.5, 1.5)", class = "Intercept"),
-  #     set_prior("normal(0, 1)", class = "sd", group = "dyad_annual", coef = "Intercept")),
+  # tar_target(brms_fit_group_multiAnnual_aggregated, brm(
+  #   sum_together | trials(sum_opps) ~ 1 + (1 | dyad_annual),
+  #   data = group_associations_all_aggregated,
+  #   family = binomial(),
+  #   prior   = c(
+  #     prior(normal(-1.5, 1), class = "Intercept"),
+  #     prior(exponential(1),   class = "sd", group = "dyad_annual")
+  #   ),
   #   chains=4,
   #   cores=4,
-  #   control = list(adapt_delta = 0.95))),
+  #   control = list(adapt_delta = 0.9))),
   # 
   # # extract edges
-  # tar_target(edges_ma, edge_list_ma(brms_fit_group_multiAnnual, include_zeros=TRUE)),
-  # tar_target(edges_ma_nz, edge_list_ma(brms_fit_group_multiAnnual, include_zeros=FALSE)),
+  # tar_target(edges_ma, edge_list_ma_agg(brms_fit_group_multiAnnual_aggregated, include_zeros=TRUE)),
+  # tar_target(edges_ma_nz, edge_list_ma_agg(brms_fit_group_multiAnnual_aggregated, include_zeros=FALSE)),
   # 
   # # add metadata: sex, age differences, residency combinations
   # tar_target(edges_sex_ma, edge_sex(edges_ma, nbw_meta_raw)),
@@ -162,16 +176,9 @@ list(
   # #######################################################################
   # ## Calculate global network properties
   # 
-  # # Calculate social differentiation and correlation between true and estimated association indices
-  # tar_target(SR, annual_S_and_R(group_associations)),
-  # 
   # # Calculate modularity (no indication of biased estimates from different years)
-  # tar_target(modularity, extract_global_trait_ma(brms_fit_group_multiAnnual, nbw_meta_raw, c('Female-Juvenile_Female-Juvenile',
-  #                                                                                            'Female-Juvenile_Male',
-  #                                                                                            'Female-Juvenile_Unk',
-  #                                                                                            'Male_Male',
-  #                                                                                            'Male_Unk',
-  #                                                                                            'Unk_Unk'))),
+  # tar_target(modularity, extract_global_trait_ma(brms_fit_group_multiAnnual_aggregated, nbw_meta_raw, c('F-F', 'F-M', 'F-Unk', 'M-M', 'M-Unk', 'Unk-Unk'), trait='modularity')),
+  # tar_target(socdiff, extract_global_trait_ma(brms_fit_group_multiAnnual_aggregated, nbw_meta_raw, c('F-F', 'F-M', 'F-Unk', 'M-M', 'M-Unk', 'Unk-Unk'), trait='socdiff')),
   # 
   # 
   # #######################################################################
@@ -200,147 +207,371 @@ list(
   # #######################################################################
   # ## Dyadic regressions
   # 
-  # # Prepare data from categorical classifications for multinomial models
   # 
-  # # For model with unknown-sex individuals
-  # tar_target(k_data_unks_included, merge(edges_df_group, unique(data.table(by_edge(all_mixtures$all.models[[3]]))), by.x='dyad',by.y='edge.id')),
+  # # Build full datasets
+  # tar_target(k_data_unks_included, build_k_dataset(all_mixtures, edges_df_group)),
+  tar_target(k_data_unks_included_imputed, impute_k_dataset(k_data_unks_included, 10)),
   # 
-  # tar_target(k_data_mm, merge(edges_df_group, unique(data.table(by_edge(mm_mixtures$all.models[[3]]))), by.x='dyad',by.y='edge.id')),
-  # tar_target(k_data_fm, merge(edges_df_group, unique(data.table(by_edge(fm_mixtures$all.models[[3]]))), by.x='dyad',by.y='edge.id')),
-  # tar_target(k_data_ff, merge(edges_df_group, unique(data.table(by_edge(ff_mixtures$all.models[[3]]))), by.x='dyad',by.y='edge.id')),
   # 
+  # # Datasets for age and residency models
+  # tar_target(k_data_mm, build_k_dataset(mm_mixtures, edges_df_group)),
+  # tar_target(k_data_fm, build_k_dataset(fm_mixtures, edges_df_group)),
+  # tar_target(k_data_ff, build_k_dataset(ff_mixtures, edges_df_group)),
+  # 
+  tar_target(k_data_mm_imputed, impute_k_dataset(k_data_mm, 10)),
+  tar_target(k_data_fm_imputed, impute_k_dataset(k_data_fm, 10)),
+  tar_target(k_data_ff_imputed, impute_k_dataset(k_data_ff, 10)),
+  # 
+  # 
+  # # Datasets for relatedness models
   # tar_target(k_data, rbindlist(list(k_data_mm, k_data_fm, k_data_ff), idcol = TRUE, fill = TRUE)),
   # tar_target(k_data_relatedness, merge(k_data, relatedness[,c('wang','wang.low','wang.high','dyad'),], by='dyad')),
-  # tar_target(k_data_relatedness_unks_included, merge(k_data_unks_included, relatedness[,c('wang','wang.low','wang.high','dyad'),], by='dyad')),
+  # 
+  tar_target(k_data_relatedness_imputed, impute_k_dataset(k_data_relatedness, 10)),
   # 
   # 
+  # # Relatedness from full model
+  # tar_target(k_data_relatedness_full, merge(k_data_unks_included, relatedness[,c('wang','wang.low','wang.high','dyad'),], by='dyad')),
+  # tar_target(k_data_relatedness_full_imputed, impute_k_dataset(k_data_relatedness_full, 10)),
+  
+  
+  
+  
   # Relatedness models
-
-  tar_target(mk_rel_all, brm(
+  
+  #HARD
+  tar_target(mk_rel_all_hard, brm(
     formula = likely.k ~ wang + (1| mm(A, B)),
-    data = k_data_relatedness_unks_included[,,],
+    data = k_data_relatedness,
     family = categorical(link=logit),
-    warmup = 2000,
-    iter = 4000,
+    prior  = c(
+      set_prior("normal(0, 1)", class = "b")),
+    warmup = 1000,
+    iter = 2000,
     chains=4,
     cores=4,
-    control = list(adapt_delta = 0.99))),
-
-  tar_target(mk_rel_mm, brm(
+    control = list(adapt_delta = 0.9))),
+  #IMPUTED
+  tar_target(mk_rel_all, brm_multiple(
     formula = likely.k ~ wang + (1| mm(A, B)),
-    data = k_data_relatedness[.id==1,,],
+    data = k_data_relatedness_imputed,
     family = categorical(link=logit),
-    warmup = 2000,
-    iter = 4000,
+    prior  = c(
+      set_prior("normal(0, 1)", class = "b")),
+    warmup = 1000,
+    iter = 2000,
     chains=4,
     cores=4,
-    control = list(adapt_delta = 0.95))),
+    combine=FALSE,
+    control = list(adapt_delta = 0.9))),
+  tar_target(mk_rel_all_combined, combine_models(mlist=mk_rel_all, check_data=FALSE)),
+  
 
-  tar_target(mk_rel_fm, brm(
+  #HARD
+  tar_target(mk_rel_mm_hard, brm(
     formula = likely.k ~ wang + (1| mm(A, B)),
-    data = k_data_relatedness[.id==2,,],
+    data = k_data_relatedness[dSex=='M-M',,],
     family = categorical(link=logit),
-    warmup = 2000,
-    iter = 4000,
+    prior  = c(
+      set_prior("normal(0, 1)", class = "b")),
+    warmup = 1000,
+    iter = 2000,
     chains=4,
     cores=4,
-    control = list(adapt_delta = 0.99))),
-
-  tar_target(mk_rel_ff, brm(
+    control = list(adapt_delta = 0.9))),
+  #IMPUTED
+  tar_target(mk_rel_mm, brm_multiple(
     formula = likely.k ~ wang + (1| mm(A, B)),
-    data = k_data_relatedness[.id==3,,],
+    data = lapply(k_data_relatedness_imputed, function(df) df[df$dSex=='M-M',]),
     family = categorical(link=logit),
-    warmup = 2000,
-    iter = 4000,
+    prior  = c(
+      set_prior("normal(0, 1)", class = "b")),
+    warmup = 1000,
+    iter = 2000,
     chains=4,
     cores=4,
-    control = list(adapt_delta = 0.95))),
+    combine=FALSE,
+    control = list(adapt_delta = 0.9))),
+  tar_target(mk_rel_mm_combined, combine_models(mlist=mk_rel_mm, check_data=FALSE)),
+  
+  
+  #HARD
+  tar_target(mk_rel_fm_hard, brm(
+    formula = likely.k ~ wang + (1| mm(A, B)),
+    data = k_data_relatedness[dSex=='F-M',,],
+    family = categorical(link=logit),
+    prior  = c(
+      set_prior("normal(0, 1)", class = "b")),
+    warmup = 1000,
+    iter = 2000,
+    chains=4,
+    cores=4,
+    control = list(adapt_delta = 0.9))),
+  #IMPUTED
+  tar_target(mk_rel_fm, brm_multiple(
+    formula = likely.k ~ wang + (1| mm(A, B)),
+    data = lapply(k_data_relatedness_imputed, function(df) df[df$dSex=='F-M',]),
+    family = categorical(link=logit),
+    prior  = c(
+      set_prior("normal(0, 1)", class = "b")),
+    warmup = 1000,
+    iter = 2000,
+    chains=4,
+    cores=4,
+    combine=FALSE,
+    control = list(adapt_delta = 0.9))),
+  tar_target(mk_rel_fm_combined, combine_models(mlist=mk_rel_fm, check_data=FALSE)),
+  
 
+  #HARD
+  tar_target(mk_rel_ff_hard, brm(
+    formula = likely.k ~ wang + (1| mm(A, B)),
+    data = k_data_relatedness[dSex=='F-F',,],
+    family = categorical(link=logit),
+    prior  = c(
+      set_prior("normal(0, 1)", class = "b")),
+    warmup = 1000,
+    iter = 2000,
+    chains=4,
+    cores=4,
+    control = list(adapt_delta = 0.9))),
+  #IMPUTED
+  tar_target(mk_rel_ff, brm_multiple(
+    formula = likely.k ~ wang + (1| mm(A, B)),
+    data = lapply(k_data_relatedness_imputed, function(df) df[df$dSex=='F-F' & df$likely.k%in%c('1','2'),]),
+    family = categorical(link=logit),
+    prior  = c(
+      set_prior("normal(0, 1)", class = "b")),
+    warmup = 1000,
+    iter = 2000,
+    chains=4,
+    cores=4,
+    combine=FALSE,
+    control = list(adapt_delta = 0.9))),
+  tar_target(mk_rel_ff_combined, combine_models(mlist=mk_rel_ff, check_data=FALSE)),
+  
 
   # Age difference models
-
-  tar_target(mk_Age_all, brm(
-    formula = likely.k ~ ageDiff + (1| mm(A, B)),
+  
+  #HARD
+  tar_target(mk_Age_all_hard, brm(
+    formula = likely.k ~ ageDiff_scaled + (1| mm(A, B)),
     data = k_data_unks_included,
     family = categorical(link=logit),
-    warmup = 2000,
-    iter = 4000,
+    prior  = c(
+      set_prior("normal(0, 1)", class = "b")),
+    warmup = 1000,
+    iter = 2000,
+    chains=4,
+    cores=4)),
+  #IMPUTED
+  tar_target(mk_Age_all, brm_multiple(
+    formula = likely.k ~ ageDiff_scaled + (1| mm(A, B)),
+    data = k_data_unks_included_imputed,
+    family = categorical(link=logit),
+    prior  = c(
+      set_prior("normal(0, 1)", class = "b")),
+    warmup = 1000,
+    iter = 2000,
     chains=4,
     cores=4,
+    combine=FALSE
   )),
+  tar_target(mk_Age_all_combined, combine_models(mlist=mk_Age_all, check_data=FALSE)),
+  
 
-  tar_target(mk_Age_mm, brm(
-    formula = likely.k ~ ageDiff + (1| mm(A, B)),
+  
+  #HARD
+  tar_target(mk_Age_mm_hard, brm(
+    formula = likely.k ~ ageDiff_scaled + (1| mm(A, B)),
     data = k_data_mm,
     family = categorical(link=logit),
-    warmup = 2000,
-    iter = 4000,
+    prior  = c(
+      set_prior("normal(0, 1)", class = "b")),
+    warmup = 1000,
+    iter = 2000,
+    chains=4,
+    cores=4)),
+  #IMPUTED
+  tar_target(mk_Age_mm_multiple, brm_multiple(
+    formula = likely.k ~ ageDiff_scaled + (1| mm(A, B)),
+    data = k_data_mm_imputed,
+    family = categorical(link=logit),
+    prior  = c(
+      set_prior("normal(0, 1)", class = "b")),
+    warmup = 1000,
+    iter = 2000,
     chains=4,
     cores=4,
-  )),
+    combine=FALSE)),
+  tar_target(mk_Age_mm_combined, combine_models(mlist=mk_Age_mm_multiple, check_data=FALSE)),
+  
 
-  tar_target(mk_Age_fm, brm(
-    formula = likely.k ~ ageDiff + (1| mm(A, B)),
+  #HARD
+  tar_target(mk_Age_fm_hard, brm(
+    formula = likely.k ~ ageDiff_scaled + (1| mm(A, B)),
     data = k_data_fm,
     family = categorical(link=logit),
-    warmup = 2000,
-    iter = 4000,
+    prior  = c(
+      set_prior("normal(0, 1)", class = "b")),
+    warmup = 1000,
+    iter = 2000,
+    chains=4,
+    cores=4)),
+  #IMPUTED
+  tar_target(mk_Age_fm_multiple, brm_multiple(
+    formula = likely.k ~ ageDiff_scaled + (1| mm(A, B)),
+    data = k_data_fm_imputed,
+    family = categorical(link=logit),
+    prior  = c(
+      set_prior("normal(0, 1)", class = "b")),
+    warmup = 1000,
+    iter = 2000,
     chains=4,
     cores=4,
+    combine=FALSE
   )),
+  tar_target(mk_Age_fm_combined, combine_models(mlist=mk_Age_fm_multiple, check_data=FALSE)),
+  
 
-  tar_target(mk_Age_ff, brm(
-    formula = likely.k ~ ageDiff + (1| mm(A, B)),
+  #HARD
+  tar_target(mk_Age_ff_hard, brm(
+    formula = likely.k ~ ageDiff_scaled + (1| mm(A, B)),
     data = k_data_ff,
     family = categorical(link=logit),
-    warmup = 2000,
-    iter = 4000,
+    prior  = c(
+      set_prior("normal(0, 1)", class = "b")),
+    warmup = 1000,
+    iter = 2000,
+    chains=4,
+    cores=4)),
+  #IMPUTED
+  tar_target(mk_Age_ff_multiple, brm_multiple(
+    formula = likely.k ~ ageDiff_scaled + (1| mm(A, B)),
+    data = k_data_ff_imputed,
+    family = categorical(link=logit),
+    prior  = c(
+      set_prior("normal(0, 1)", class = "b")),
+    warmup = 1000,
+    iter = 2000,
     chains=4,
     cores=4,
+    combine=FALSE
   )),
-
-
+  tar_target(mk_Age_ff_combined, combine_models(mlist=mk_Age_ff_multiple, check_data=FALSE)),
+  
+  
+  
   # Residency models
-
-  tar_target(mk_res_all, brm(
+  
+  #HARD
+  tar_target(mk_res_all_hard, brm(
     formula = likely.k ~ dyadicResidency + (1| mm(A, B)),
     data = k_data_unks_included[dRes %in% c('R-R','R-T','T-T'),,],
     family = categorical(link=logit),
-    warmup = 2000,
-    iter = 4000,
+    prior  = c(
+      set_prior("normal(0, 1)", class = "b")),
+    warmup = 1000,
+    iter = 2000,
+    chains=4,
+    cores=4)),
+  # IMPUTED
+  tar_target(mk_res_all_multiple, brm_multiple(
+    formula = likely.k ~ dyadicResidency + (1| mm(A, B)),
+    data = lapply(k_data_unks_included_imputed, function(df) df[df$dRes %in% c('R-R','R-T','T-T'),]),
+    family = categorical(link=logit),
+    prior  = c(
+      set_prior("normal(0, 1)", class = "b")),
+    warmup = 1000,
+    iter = 2000,
     chains=4,
     cores=4,
+    combine=FALSE
   )),
+  tar_target(mk_res_all_combined, combine_models(mlist=mk_res_all_multiple, check_data=FALSE)),
+  
 
-  tar_target(mk_res_mm, brm(
+  
+  #HARD
+  tar_target(mk_res_mm_hard, brm(
     formula = likely.k ~ dyadicResidency + (1| mm(A, B)),
     data = k_data_mm[dRes %in% c('R-R','R-T','T-T'),,],
     family = categorical(link=logit),
-    warmup = 2000,
-    iter = 4000,
+    prior  = c(
+      set_prior("normal(0, 1)", class = "b")),
+    warmup = 1000,
+    iter = 2000,
+    chains=4,
+    cores=4)),
+  #IMPUTED
+  tar_target(mk_res_mm_multiple, brm_multiple(
+    formula = likely.k ~ dyadicResidency + (1| mm(A, B)),
+    data = lapply(k_data_mm_imputed, function(df) df[df$dRes %in% c('R-R','R-T','T-T'),]),
+    family = categorical(link=logit),
+    prior  = c(
+      set_prior("normal(0, 1)", class = "b")),
+    warmup = 1000,
+    iter = 2000,
     chains=4,
     cores=4,
-  )),
+    combine=FALSE)),
+  tar_target(mk_res_mm_combined, combine_models(mlist=mk_res_mm_multiple, check_data=FALSE)),
+  
 
-  tar_target(mk_res_fm, brm(
+  #HARD
+  tar_target(mk_res_fm_hard, brm(
     formula = likely.k ~ dyadicResidency + (1| mm(A, B)),
     data = k_data_fm[dRes %in% c('R-R','R-T','T-T'),,],
     family = categorical(link=logit),
-    warmup = 2000,
-    iter = 4000,
+    prior  = c(
+      set_prior("normal(0, 1)", class = "b")),
+    warmup = 1000,
+    iter = 2000,
+    chains=4,
+    cores=4)),
+  #IMPUTED
+  tar_target(mk_res_fm_multiple, brm_multiple(
+    formula = likely.k ~ dyadicResidency + (1| mm(A, B)),
+    data = lapply(k_data_fm_imputed, function(df) df[df$dRes %in% c('R-R','R-T','T-T'),]),
+    family = categorical(link=logit),
+    prior  = c(
+      set_prior("normal(0, 1)", class = "b")),
+    warmup = 1000,
+    iter = 2000,
     chains=4,
     cores=4,
+    combine=FALSE
   )),
+  tar_target(mk_res_fm_combined, combine_models(mlist=mk_res_fm_multiple, check_data=FALSE)),
+  
+  
 
-  tar_target(mk_res_ff, brm(
+  #HARD
+  tar_target(mk_res_ff_hard, brm(
     formula = likely.k ~ dyadicResidency + (1| mm(A, B)),
     data = k_data_ff[dRes %in% c('R-R','R-T','T-T'),,],
     family = categorical(link=logit),
-    warmup = 2000,
-    iter = 4000,
+    prior  = c(
+      set_prior("normal(0, 1)", class = "b")),
+    warmup = 1000,
+    iter = 2000,
+    chains=4,
+    cores=4)),
+  #IMPUTED
+  tar_target(mk_res_ff_multiple, brm_multiple(
+    formula = likely.k ~ dyadicResidency + (1| mm(A, B)),
+    data = lapply(k_data_ff_imputed, function(df) df[df$dRes %in% c('R-R','R-T','T-T'),]),
+    family = categorical(link=logit),
+    prior  = c(
+      set_prior("normal(0, 1)", class = "b")),
+    warmup = 1000,
+    iter = 2000,
     chains=4,
     cores=4,
+    combine=FALSE
   ))
+  # tar_target(mk_res_ff_combined, combine_models(mlist=mk_res_ff_multiple, check_data=FALSE)),
+  
 
 
   # #######################################################################
@@ -353,12 +584,12 @@ list(
   # tar_target(socprog_input_secondary, write_xlsx(prep_SOCPROG_supplemental(nbw_meta_raw), './SOCPROG/SP_input/supplemental_input_for_SOCPROG.xlsx')),
   # 
   # 
-  # #######################################################################
-  # ## Figures
-  # 
+  # # #######################################################################
+  # # ## Figures
+  # #
   # tar_target(Figure1, save_figure('./Manuscript/Figures/Figure1.png',w=4,h=4,
   #                                 plot_network(edges_ma[year_group==27], threshold=0.02, lwd=100, nbw_meta_raw))),
-  # 
+  # #
   # tar_target(Figure2, save_figure('./Manuscript/Figures/Figure2.png',w=10,h=3,
   #                                 (socMod_plot_edit(ff_mixtures,'Female-Female', 3) | socMod_plot_edit(fm_mixtures,'Female-Male', 3) | socMod_plot_edit(mm_mixtures,'Male-Male', 3)))),
   # 
@@ -369,15 +600,16 @@ list(
   #                                   plot_socprog_LAR_results_panel('./SOCPROG/SP_results/Standard-Adult', 'mf_adult', 'Male to Female') |
   #                                   plot_socprog_LAR_results_panel('./SOCPROG/SP_results/Standard-Adult', 'fm_adult', 'Female to Male'))),
   # 
-  # tar_target(Figure4, save_figure('./Manuscript/Figures/Figure4.png',w=3,h=3,
-  #                                      plot_age_effect(list(mk_Age_mm, mk_Age_fm, mk_Age_ff),
-  #                                                      var = 'ageDiff',
+  # tar_target(Figure4, save_figure('./Manuscript/Figures/Figure4.png',w=4,h=4,
+  #                                      plot_age_effect(list(mk_Age_mm_combined, mk_Age_fm_combined, mk_Age_ff_combined),
+  #                                                      var = 'ageDiff_scaled',
   #                                                      xlab = 'Difference in minimum age',
-  #                                                      chosen_categories = 'Strong'))),
+  #                                                      chosen_categories = 'Strong',
+  #                                                      k_data_mm, k_data_fm, k_data_ff))),
+  # 
   # 
   # tar_target(Figure5, save_figure('./Manuscript/Figures/Figure5.png',w=15,h=7.5,
-  #                                 relationship_sankey_mm(k_data) | relationship_sankey_ff(k_data))),
-  # 
+  #                                 relationship_sankey_mm(k_data_unks_included[dSex=='M-M',,]) | relationship_sankey_ff(k_data_unks_included[dSex=='F-F',,]))),
   # 
   # 
   # # Supplemental figures
@@ -386,7 +618,7 @@ list(
   #                                  compare_BIC_plot(ff_mixtures, 'F-F') |
   #                                    compare_BIC_plot(fm_mixtures, 'F-M') |
   #                                    compare_BIC_plot(mm_mixtures, 'M-M'))),
-  # 
+  # #
   # tar_target(Figure_S2, save_figure('./Manuscript/Figures/FigureS2.png',w=10,h=5,
   #                                   simple_relatedness_plot(relatedness_df, k_data_relatedness))),
   # 
@@ -409,6 +641,8 @@ list(
   # tar_target(group_associations_no_demo_restriction_reliable, build_group_associations(group_df_all_old_reliable)),
   # tar_target(group_associations_no_demo_restriction_day_reliable, merge(group_associations_no_demo_restriction_reliable, unique(group_df_all_old_reliable[,.(group_ID=myGroups, day=as.Date(groupTime))]), by='group_ID', all.X=TRUE)), ###### No effect on code but can change to 'all.x' in next iteration
   # tar_target(group_associations_demo_reliable, overlappingIDs(group_associations_no_demo_restriction_day_reliable, nbw_meta_raw)),
+  # tar_target(group_associations_demo_reliable_aggregated, aggregate_group_associations_demo(group_associations_demo_reliable)),
+  # 
   # 
   # # for annual stream
   # tar_target(df_exclusions, group_df_all_old_reliable[!(year%in%c('2008','2009')),,]),
@@ -417,40 +651,39 @@ list(
   # tar_target(group_associations_reliable, build_group_associations_2(df_exclusions_grouped), pattern=map(df_exclusions_grouped), iteration="list"),
   # 
   # tar_target(group_associations_all_reliable, unlist_group_associations(group_associations_reliable)), # also adds dyad-year names
+  # tar_target(group_associations_all_reliable_aggregated, aggregate_group_associations(group_associations_all_reliable)), # aggregate
   # 
-  # # Run edge weight models using multi-annual network structure
-  # tar_target(brms_fit_group_multiAnnual_reliable, brm(
-  #   formula = together ~ (1|dyad_annual),
-  #   data = group_associations_all_reliable,
-  #   family = bernoulli(),
-  #   prior = c(
-  #     set_prior("normal(-1.5, 1.5)", class = "Intercept"),
-  #     set_prior("normal(0, 1)", class = "sd", group = "dyad_annual", coef = "Intercept")),
+  # 
+  # tar_target(brms_fit_group_multiAnnual_reliable_aggregated, brm(
+  #   sum_together | trials(sum_opps) ~ 1 + (1 | dyad_annual),
+  #   data = group_associations_all_reliable_aggregated,
+  #   family = binomial(),
+  #   prior   = c(
+  #     prior(normal(-1.5, 1), class = "Intercept"),
+  #     prior(exponential(1),   class = "sd", group = "dyad_annual")
+  #   ),
   #   chains=4,
   #   cores=4,
-  #   control = list(adapt_delta = 0.95))),
+  #   control = list(adapt_delta = 0.9))),
   # 
-  # 
-  # # Run edge weight models for 'reliable' left-sided dataset
-  # tar_target(brms_fit_group_reliable, brm(
-  #   formula = together ~ (1|dyad),
-  #   data = group_associations_demo_reliable,
-  #   family = bernoulli(),
-  #   prior = c(
-  #     set_prior("normal(-1.5, 1)", class = "Intercept"),
-  #     set_prior("normal(0, 1)", class = "sd", group = "dyad", coef = "Intercept")),
+  #   # Run edge weight models for 'reliable' left-sided dataset
+  # tar_target(brms_fit_group_reliable_aggregated, brm(
+  #   sum_together | trials(sum_opps) ~ 1 + (1 | dyad),
+  #   data = group_associations_demo_reliable_aggregated,
+  #   family = binomial(),
+  #   prior   = c(
+  #     prior(normal(-1.5, 1), class = "Intercept"),
+  #     prior(exponential(1),   class = "sd", group = "dyad")
+  #   ),
   #   chains=4,
-  #   cores=4)),
+  #   cores=4,
+  #   control = list(adapt_delta = 0.9))),
   # 
-  # tar_target(SR_reliable, annual_S_and_R(group_associations_reliable)),
   # 
-  # # Calculate modularity
-  # tar_target(modularity_reliable, extract_global_trait_ma(brms_fit_group_multiAnnual, nbw_meta_raw, c('Female-Juvenile_Female-Juvenile',
-  #                                                                                            'Female-Juvenile_Male',
-  #                                                                                            'Female-Juvenile_Unk',
-  #                                                                                            'Male_Male',
-  #                                                                                            'Male_Unk',
-  #                                                                                            'Unk_Unk'))),
+  # # Calculate S and Q for datasets of more heavily marked individuals
+  # tar_target(modularity_reliable, extract_global_trait_ma(brms_fit_group_multiAnnual_reliable_aggregated, nbw_meta_raw, c('F-F', 'F-M', 'F-Unk', 'M-M', 'M-Unk', 'Unk-Unk'), trait='modularity')),
+  # tar_target(socdiff_reliable, extract_global_trait_ma(brms_fit_group_multiAnnual_reliable_aggregated, nbw_meta_raw, c('F-F', 'F-M', 'F-Unk', 'M-M', 'M-Unk', 'Unk-Unk'), trait='socdiff')),
+  # 
   # 
   # # Fit mixture model for "reliable" data
   # tar_target(all_mixtures_reliable, fit_mixture_model_all(group_associations_demo_reliable, nbw_meta_raw, 3, 'BIC')),
@@ -498,7 +731,7 @@ list(
   # ## Biopsy robustness check
   # 
   # tar_target(biopsyTitles, biopsySexTitles(raw_photoData)),
-  # tar_target(k_data_biopsy, dyadic_biopsy(k_data, biopsyTitles)),
+  # tar_target(k_data_biopsy, dyadic_biopsy(k_data_unks_included, biopsyTitles)),
   # 
   # tar_target(mk_biopsyCheck, brm(
   #   formula = likely.k ~ dyadic_biopsy + (1| mm(A, B)),
@@ -510,21 +743,21 @@ list(
   #   iter = 4000,
   #   chains=4,
   #   cores=4)),
-
-  
-  #######################################################################
-  ## Write supplement
-
+  # 
+  # 
+  # #######################################################################
+  # ## Write supplement
+  # 
   # tar_quarto(
   #   supplement,
   #   file.path('Manuscript','Supplement_BottlenoseRelationships.qmd')),
-
-
-  #######################################################################
-  ## Write manuscript
-
+  # 
+  # 
+  # #######################################################################
+  # ## Write manuscript
+  # 
   # tar_quarto(
   #   paper,
   #   file.path('Manuscript','MS_BottlenoseRelationships.qmd'))
-  
+
 )

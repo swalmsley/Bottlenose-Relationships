@@ -49,8 +49,8 @@ inline <- function(fit, var, p, CI) {
   return(output)
   
 }
-# fit <- tar_read(m3)
-# var <- 'numSamplingPeriodsByYear'
+# fit <- tar_read(mk_Age_all_combined)
+# var <- 'mu2_ageDiff'
 # p = 0.9
 # CI = FALSE
 
@@ -157,7 +157,7 @@ plot_socprog_LAR_results_panel <- function(path, type, title) {
     geom_errorbar(inherit.aes=FALSE, data=error_df, aes(x=log(X), ymin=ymin, ymax=ymax, color=Type), width=0.2, size=0.5)+
     labs(x='Lag (days)', y='Association rate') +
     xlim(1, log(7600))+
-    ylim(-0.001, 0.32)+
+    ylim(-0.001, 0.35)+
     ggtitle(title)+
     theme_classic() +
     # annotate('text',x=7,y=0.3,label=paste('Duration \u2248 ', as.character(v), 'years'), size=4)+
@@ -165,23 +165,24 @@ plot_socprog_LAR_results_panel <- function(path, type, title) {
     theme(legend.position = "none")
 
 }
-# path <- './SOCPROG/SP_results'
-# type='fm'
-# title = 'All relationships'
-
-# path <- './SOCPROG/SP_results/Reliable'
-# type='all_reliable'
-# title = 'all'
-
+# path <- './SOCPROG/SP_results/Standard-Adult'
+# type <- 'mm_adult'
+# title <- 'Male-Male'
 
 
 # Process photo-ID observations -------------------------------------------
 process_photoID <- function(lv_data, chosen_side, chosen_canyons){
   
-  # ## Manual corrections based on 2024 fieldwork 
-  lv_data[Title=='6536',Title:='2048',]
-  ###### For revision: Consider re-running SOCPROG analyses or can wait for potential additional sex class information
-
+  # Manual edits for 2024
+  # 1. Several photos with erroneous metadata, including times 
+  photos_with_errors <- c('NBW_20240721_DSC_8272.NEF',
+                          'NBW_20240721_DSC_8271.NEF',
+                          'NBW_20240721_DSC_8267.NEF')
+  lv_data <- lv_data[!(File.name %in% photos_with_errors),,]
+  # 2. Fix to IDs 1317, 6018, 6402
+  # lv_data[Title==1317 & year(Date.Original)==2021, Title:=6018,]
+  # lv_data[Title==6402, Title:=6018, ]
+  
   # extract side information
   lv_data[,side:=ifelse(grepl("Left Side", Keyword.export),"Left","Right"),] # extract side from keyword list
   lv_data[,numSides:=length(unique(side)),by=Title] # identify IDs that are 2-sided
@@ -326,15 +327,9 @@ build_nbw_metadata <- function(dt, chosen_side) {
   dt <- dt[Title!="see crops",,]
   dt <- dt[Title!="unk",,]
   
-  ###### manual edits
-  ## merged ID
-  dt[Title=='6536',Title:='2048',]
-  ## photo-ID error fix
-  dt[Title==6527 & year==2021,ageClass:='Juvenile',]
-  
   # DO RESIDENCY BEFORE restricting by side 
   dt[,residency:=ifelse(length(unique(year))==1, 'Transient', 'Resident'),by=Title]
-  dt[residency=='Transient' & year %in% c(1988, 2023),residency:='Unknown',] ######
+  dt[residency=='Transient' & year %in% c(1988, 2024),residency:='Unknown',] # Changed to 2024, now most recent year of data
 
   # add left and right columns
   dt[grepl("Left", Keyword.export), side := "left"]
@@ -345,18 +340,22 @@ build_nbw_metadata <- function(dt, chosen_side) {
 
   # reliability
   dt[,reliability:='Not reliable',]
-  dt[grepl('Notch|Back Indent', Keyword.export), reliability:='Reliable',by=c('Title','year')]
+  dt[grepl('Notch|Back Indent|Nick', Keyword.export), reliability:='Reliable',by=c('Title','year')] # Changed to include Nick in 2025
 
   # add columns with sex details
-  dt=dt%>%mutate(sex = ifelse(grepl("FemaleJ", Keyword.export), "Female-Juvenile", NA))
-  dt=dt%>%mutate(sex = ifelse(grepl("Male", Keyword.export), "Male", sex))
-  dt$sex <- factor(dt$sex,levels=c("Female-Juvenile","Male"))
+  dt[, sex:=ifelse(grepl("Unknown", Keyword.export), "Unknown", NA), ]
+  dt[, sex:=ifelse(grepl("FemaleJ", Keyword.export), "FemaleJ", sex), ]
+  dt[, sex:=ifelse(grepl("Male", Keyword.export), "Male", sex), ]
+  # old version below
+  # dt=dt%>%mutate(sex = ifelse(grepl("FemaleJ", Keyword.export), "Female-Juvenile", NA))
+  # dt=dt%>%mutate(sex = ifelse(grepl("Male", Keyword.export), "Male", sex))
+  # dt$sex <- factor(dt$sex,levels=c("Female-Juvenile","Male"))
 
   # Step 1: Assign 'Calf' or 'Adult' based on 'Keyword.export'
-  dt[, ageClass := ifelse(grepl('samCalf', Keyword.export), 'Calf', 'Adult')]
+  dt[, ageClass := ifelse(grepl('ageCalf', Keyword.export), 'Calf', 'Adult')]
   
   # Step 2: Further refine 'ageClass' for non-'Calf' rows to include 'Juvenile'
-  dt[ageClass == 'Adult' & grepl('samJuv', Keyword.export), ageClass := 'Juvenile']
+  dt[ageClass == 'Adult' & grepl('ageJuv', Keyword.export), ageClass := 'Juvenile']
   
   # Step 3: Create 'young' column indicating if the individual is either 'Calf' or 'Juvenile'
   dt[, young := ageClass %in% c('Calf', 'Juvenile')]
@@ -455,6 +454,38 @@ edge_list <- function(fit, include_zeros) {
 
 
 
+# Pull out edges
+edge_list_agg <- function(fit, include_zeros) {
+  
+  # identify non-zero dyads
+  m_data <- data.table(fit$data)
+  m_data[,nAssociations:=sum_together,by=dyad]
+  nz_dyads <- m_data[sum_together >=1,unique(dyad),]
+  
+  # extract all edge samples
+  all_edge_samples <- data.frame(coef(fit, summary=FALSE))
+  colnames(all_edge_samples) <- str_extract(colnames(all_edge_samples), "\\d+_\\d+")
+  
+  # apply transformation to all samples
+  edge_samples <- data.frame(lapply(all_edge_samples, inv_logit), check.names = FALSE)
+  
+  # extract edge list
+  edges <- data.table(data.frame(dyad=colnames(edge_samples),
+                                 edge=colMeans(edge_samples),
+                                 edge_sd=apply(edge_samples, 2, sd)))
+  
+  # exclude non-zero dyads if desired
+  edges <- merge(edges, unique(m_data[,c('dyad', 'nAssociations'),]), by='dyad')
+  if (!include_zeros) (edges <- edges[dyad %in% nz_dyads,,])
+  
+  return(edges)
+  
+}
+# fit <- tar_read(brms_fit_group_aggregated)
+# include_zeros <- FALSE
+
+
+
 focal_edges <- function(focal, edge_list) {
 
   #pull out A and B
@@ -495,7 +526,8 @@ max_edge <- function(edge_list) {
 # edge_list <- tar_read(edges_df_group)
 
 
-
+###### For future versions should change "unk" to "unknown", no impact on current version however
+###### Just means that dyads with unknown will have dyadic sex NA 
 edge_sex <- function(edges, meta) {
 
   edges$A <- sub("^(\\d+)_.*", "\\1", edges$dyad) # pull out ID A
@@ -510,10 +542,10 @@ edge_sex <- function(edges, meta) {
   edges[,dyadicSex:=paste(sort(c(sexA,sexB))[1], sort(c(sexA,sexB))[2], sep="_"),by=.I]
 
   edges[dyadicSex=='Male_Male',dSex:='M-M',]
-  edges[dyadicSex=='Female-Juvenile_Male',dSex:='F-M',]
+  edges[dyadicSex=='FemaleJ_Male',dSex:='F-M',]
   edges[dyadicSex=='Male_Unk',dSex:='M-Unk',]
-  edges[dyadicSex=='Female-Juvenile_Unk',dSex:='F-Unk',]
-  edges[dyadicSex=='Female-Juvenile_Female-Juvenile',dSex:='F-F',]
+  edges[dyadicSex=='FemaleJ_Unk',dSex:='F-Unk',]
+  edges[dyadicSex=='FemaleJ_FemaleJ',dSex:='F-F',]
   edges[dyadicSex=='Unk_Unk',dSex:='Unk-Unk',]
 
   return(edges)
@@ -551,7 +583,7 @@ edge_residency <- function(edges, meta) {
 
   # incorporate residency information
 
-  # Note technically this will fail if an individual is seen in 1988 and 2023 only (did not occur)
+  # Note technically this will fail if an individual is seen in 1988 and 2024 only (did not occur)
   edges[,resA:=meta[Title==A,unique(residency),], by=A]
   edges[,resB:=meta[Title==B,unique(residency),], by=B]
 
@@ -760,20 +792,19 @@ edge_sex_associations <- function(edges, meta) {
   
   edges[,sexA:=meta[Title==A,unique(sex),],by=A]
   edges[,sexB:=meta[Title==B,unique(sex),],by=B]
-  edges[is.na(sexA),sexA:='Unk',]
-  edges[is.na(sexB),sexB:='Unk',]
+  # edges[is.na(sexA),sexA:='Unk',]
+  # edges[is.na(sexB),sexB:='Unk',]
   edges[,dyadicSex:=paste(sort(c(sexA,sexB))[1], sort(c(sexA,sexB))[2], sep="_"), by=.I] 
   
   edges[dyadicSex=='Male_Male',dSex:='M-M',]
-  edges[dyadicSex=='Female-Juvenile_Male',dSex:='F-M',]
-  edges[dyadicSex=='Male_Unk',dSex:='M-Unk',]
-  edges[dyadicSex=='Female-Juvenile_Unk',dSex:='F-Unk',]
-  edges[dyadicSex=='Female-Juvenile_Female-Juvenile',dSex:='F-F',]
-  edges[dyadicSex=='Unk_Unk',dSex:='Unk-Unk',]
+  edges[dyadicSex=='FemaleJ_Male',dSex:='F-M',]
+  edges[dyadicSex=='Male_Unknown',dSex:='M-Unk',]
+  edges[dyadicSex=='FemaleJ_Unknown',dSex:='F-Unk',]
+  edges[dyadicSex=='FemaleJ_FemaleJ',dSex:='F-F',]
+  edges[dyadicSex=='Unknown_Unknown',dSex:='Unk-Unk',]
   
   ###### Test this very carefully!
   # reconstruct sex and match to meta, for example
-  ####### why is this different from edge_sex?
   
 }
 # edges <- tar_read(group_associations_demo) # not really edges but will do for now
@@ -935,7 +966,7 @@ biopsySexTitles <- function(d) {
   
   
 }
-#d <- tar_read(raw_photoData)
+# d <- tar_read(raw_photoData)
 
 
 dyadic_biopsy <- function(df, biopsyTitles) {
@@ -1017,7 +1048,7 @@ multinomial_preds <- function(fit, var, id_label) {
   setnames(newdata, "var", var)
 
   # Get posterior predictions
-  pred <- data.table(epred_draws(fit, newdata, re_formula=NA, ndraws = 500))
+  pred <- data.table(epred_draws(fit, newdata, re_formula=NA, ndraws = 1000))
 
   # Compute mean and credible intervals
   pred_summary <- pred[, .(
@@ -1038,32 +1069,51 @@ multinomial_preds <- function(fit, var, id_label) {
   return(pred_summary)
 
 }
-# fit <- tar_read(mk_Age_mm)
-# var <- 'ageDiff'
+# fit <- tar_read(mk_Age_mm_combined)
+# var <- 'ageDiff_scaled'
 # id_label <- 'MM'
 
 
 
 
 
-plot_age_effect <- function(fits, var, xlab, chosen_categories) {
+
+
+plot_age_effect <- function(fits, var, xlab, chosen_categories,k_data_mm, k_data_fm, k_data_ff) {
   
+  # Extract information for back-transformation to raw age scale
+  original_scales <- list(
+    mm = list(center = mean(k_data_mm$ageDiff),
+              scale  = sd(k_data_mm$ageDiff)),
+    fm = list(center = mean(k_data_fm$ageDiff),
+              scale  = sd(k_data_fm$ageDiff)),
+    ff = list(center = mean(k_data_ff$ageDiff),
+              scale  = sd(k_data_ff$ageDiff)))
+
   # Calculate predictions
   p1 <- multinomial_preds(fits[[1]], var, 'mm') # important that order is retained - add test at end of function
   p2 <- multinomial_preds(fits[[2]], var, 'fm')
   p3 <- multinomial_preds(fits[[3]], var, 'ff')
   
-  # Bind predictions from different models together
+  # Bind predictions from different models together and fix up sex labels
   d <- rbind(p1, p2, p3)
-  
-  # fix up sex labels
   d[id=='mm',id:='Male-Male',]
   d[id=='fm',id:='Female-Male',]
   d[id=='ff',id:='Female-Female',]
   d$id <- factor(d$id, levels=c('Male-Male','Female-Male','Female-Female'))
   
+  # Back-transform x per group
+  sc_dt <- data.table(
+    id     = factor(c('Male-Male','Female-Male','Female-Female'),
+                    levels = c('Male-Male','Female-Male','Female-Female')),
+    center = c(original_scales$mm$center, original_scales$fm$center, original_scales$ff$center),
+    scale  = c(original_scales$mm$scale,  original_scales$fm$scale,  original_scales$ff$scale))
+  d <- merge(d, sc_dt, by='id', all.x=TRUE)
+  d[, ageDiff := get(var) * scale + center]
+  
+  
   # Plot
-  p <- ggplot(d[.category %in% chosen_categories, ], aes(x = get(var), y = mean_epred, color = .category, linetype = id)) +
+  p <- ggplot(d[.category %in% chosen_categories, ], aes(x = ageDiff, y = mean_epred, color = .category, linetype = id)) +
     geom_ribbon(aes(ymin = lower, ymax = upper, fill = as.factor(.category)), colour=NA, alpha=c(rep(0.2,50), rep(0.05, 50), rep(0.05, 50)))+ # Fixed alpha for ribbons
     geom_line(linewidth = 0.6) +
     scale_color_manual(values = rel_colors[chosen_categories == levels(d$.category)]) +
@@ -1072,8 +1122,8 @@ plot_age_effect <- function(fits, var, xlab, chosen_categories) {
     labs(x = xlab, y = "Probability of forming strong relationship") +
     guides(fill = FALSE, color = FALSE, alpha = FALSE, linetype = guide_legend(override.aes = list(fill = c(NA, NA, NA)))) +  
     theme_classic() +
-    xlim(0,28)+
-    theme(legend.position = c(0.7, 0.7),  # Move legend inside the plot
+    xlim(0,31)+
+    theme(legend.position = c(0.7, 0.8),  # Move legend inside the plot
           legend.background = element_rect(fill = alpha("white", 0.7), color = NA),
           legend.text = element_text(size=8),
           legend.key = element_blank(),
@@ -1083,10 +1133,14 @@ plot_age_effect <- function(fits, var, xlab, chosen_categories) {
   return(p)
   
 }
-# fits <- list(tar_read(mk_Age_mm), tar_read(mk_Age_fm), tar_read(mk_Age_ff))
-# var <- 'ageDiff'
+# fits <- list(tar_read(mk_Age_mm_combined), tar_read(mk_Age_fm_combined), tar_read(mk_Age_ff_combined))
+# var <- 'ageDiff_scaled'
 # xlab <- "Difference in Minimum Age"
 # chosen_categories <- 'Strong'
+# k_data_mm <- tar_read(k_data_mm)
+# k_data_fm <- tar_read(k_data_fm)
+# k_data_ff <- tar_read(k_data_ff)
+
 
 
 
@@ -1329,12 +1383,12 @@ relationship_sankey_mm <- function(d) {
     geom_sankey(flow.alpha=0.75) +
 
     annotate('text', label = 'Resident-Resident', x=0.9, y=-550, hjust=1) +
-    annotate('text', label = 'Resident-Transient', x=0.9, y=870, hjust=1) +
-    annotate('text', label = 'Transient-Transient', x=0.9, y=1410, hjust=1) +
+    annotate('text', label = 'Resident-Transient', x=0.9, y=960, hjust=1) +
+    annotate('text', label = 'Transient-Transient', x=0.9, y=1530, hjust=1) +
 
-    annotate('text', label = 'Absent', x=2.1, y=-750, hjust=0) +
-    annotate('text', label = 'Weak', x=2.1, y=620, hjust=0) +
-    annotate('text', label = 'Strong', x=2.1, y=1360, hjust=0) +
+    annotate('text', label = 'Absent', x=2.1, y=-450, hjust=0) +
+    annotate('text', label = 'Weak', x=2.1, y=1040, hjust=0) +
+    annotate('text', label = 'Strong', x=2.1, y=1520, hjust=0) +
     
     labs(x='', y='')+
     scale_x_discrete(labels=c('Dyadic residency','Relationship type'))+
@@ -1345,7 +1399,7 @@ relationship_sankey_mm <- function(d) {
     theme(legend.position = 'none')
   
 }
-# d <- tar_read(k_data)
+# d <- tar_read(k_data_unks_included)
 
 
 
@@ -1369,13 +1423,13 @@ relationship_sankey_ff <- function(d) {
     scale_fill_manual(values=c('grey60', 'grey80','grey80', rel_colors))+
     geom_sankey(flow.alpha=0.75) +
     
-    annotate('text', label = 'Resident-Resident', x=0.9, y=-2000, hjust=1) +
-    annotate('text', label = 'Resident-Transient', x=0.9, y=1400, hjust=1) +
-    annotate('text', label = 'Transient-Transient', x=0.9, y=3170, hjust=1) +
+    annotate('text', label = 'Resident-Resident', x=0.9, y=-1900, hjust=1) +
+    annotate('text', label = 'Resident-Transient', x=0.9, y=1500, hjust=1) +
+    annotate('text', label = 'Transient-Transient', x=0.9, y=3320, hjust=1) +
     
-    annotate('text', label = 'Absent', x=2.1, y=-750, hjust=0) +
-    annotate('text', label = 'Weak', x=2.1, y=2500, hjust=0) +
-    annotate('text', label = 'Strong', x=2.1, y=3265, hjust=0) +
+    annotate('text', label = 'Absent', x=2.1, y=-700, hjust=0) +
+    annotate('text', label = 'Weak', x=2.1, y=2590, hjust=0) +
+    annotate('text', label = 'Strong', x=2.1, y=3400, hjust=0) +
     
     labs(x='', y='')+
     scale_x_discrete(labels=c('Dyadic residency','Relationship type'))+
@@ -1386,7 +1440,7 @@ relationship_sankey_ff <- function(d) {
     theme(legend.position = 'none')
   
 }
-# d <- tar_read(k_data)
+# d <- tar_read(k_data_unks_included)
 
 
 
@@ -1413,7 +1467,7 @@ simple_relatedness_plot <- function(relatedness_df, k_data_relatedness) {
   g2 <- ggplot(k_data_relatedness, aes(x=as.factor(likely.k), y=wang))+
     geom_jitter(width = 0.15, alpha=1)+
     geom_boxplot(alpha=0.75, size=1) +
-    scale_x_discrete(labels=c('Rarely interact (k=1)', 'Weak relationship (k=2)', 'Strong relationship (k>2)'))+
+    scale_x_discrete(labels=c('Rarely interact (k=1)', 'Weak (k=2)', 'Strong (k>2)'))+
     labs(x='', y='Wang relatedness') +
     theme_classic() +
     theme(axis.text.x = element_text(size=10))
@@ -1536,7 +1590,7 @@ carve_groups <- function(photoData, meta) {
 
 }
 # photoData <- tar_read(side)
-# meta <- tar_read(nbw_meta)
+# meta <- tar_read(nbw_meta_raw)
 
 
 
@@ -1662,6 +1716,22 @@ aggregate_group_associations <- function(g) {
 
 }
 # g <- tar_read(group_associations_all)
+# g <- tar_read(group_associations_all_reliable)
+
+
+# Combine group associations for summarizing ------------------------------
+aggregate_group_associations_demo <- function(g) {
+  
+  g[, sum_together:=sum(together), by=c('dyad')]
+  g[, sum_opps:=.N, by=c('dyad')]
+  
+  aggregated <- unique(g[, c('A','B','sum_together','sum_opps','dyad')])
+  # aggregated[,together:=sum_together,]
+  
+  return(aggregated)
+  
+}
+# g <- tar_read(group_associations_demo)
 
 
 
@@ -1707,7 +1777,7 @@ unlist_group_associations <- function(group_associations) {
 
 
 # Extract network traits --------------------------------------------------
-extract_global_trait_ma <- function(fit, meta, chosen_dyadic_sexes) {
+extract_global_trait_ma <- function(fit, meta, chosen_dyadic_sexes, trait) {
 
   # extract all edge samples
   all_edge_samples <- data.frame(coef(fit, summary=FALSE)[[1]])
@@ -1723,7 +1793,7 @@ extract_global_trait_ma <- function(fit, meta, chosen_dyadic_sexes) {
   years <- years[!years %in% c(4, 18)]  # exclude two years with just one dyad: 1991, 2009
 
   # number of draws
-  N_draws <- 100
+  N_draws <- 1000
 
   # randomly select draws to use in advance
   chosen_draws <- sample(1:nrow(all_edge_samples), size = N_draws, replace = FALSE)
@@ -1768,14 +1838,19 @@ extract_global_trait_ma <- function(fit, meta, chosen_dyadic_sexes) {
       net <- igraph::graph_from_edgelist(as.matrix(draw_of_network[,c('A','B'),]), directed=FALSE)
 
       # add in edgeweights
-      igraph::E(net)$weight <- inv_logit(draw_of_network[,c('weight_sample_raw'),]) # inv-logit here because it's a bernoulli model # confirm makes sense to transform prior to strength calculation
+      igraph::E(net)$weight <- inv_logit(draw_of_network[,c('weight_sample_raw'),]) # inv-logit here because it's a bernoulli/binomial model # confirm makes sense to transform prior to strength calculation
 
-      # for modularity, likely want to incorporate threshold? Or are modularity measures often weighted? At least try both ways
-      wtc <- cluster_louvain(net) # this gives modularity value, but sometimes 2 values? So using modularity function below instead
-      mod <- modularity(net, membership(wtc), weights=E(net)$weight)
+      # for modularity, may want to consider weighting vs. thresholding
+      if (trait=='modularity') (wtc <- cluster_louvain(net)) # this gives modularity value, but sometimes 2 values? So using modularity function below instead
+      if (trait=='modularity') (value <- modularity(net, membership(wtc), weights=E(net)$weight))
 
+      if (trait=='socdiff') (weights <- E(net)$weight) # this gives modularity value, but sometimes 2 values? So using modularity function below instead
+      if (trait=='socdiff') (value <- calculate_cv(weights))
+      
+      
+      
       # add to accumulating dataframe
-      metric_samples[i,] <- mod
+      metric_samples[i,] <- value
 
     }
 
@@ -1790,25 +1865,35 @@ extract_global_trait_ma <- function(fit, meta, chosen_dyadic_sexes) {
   return(output)
 
 }
-# fit <- tar_read(brms_fit_group_multiAnnual)
+# fit <- tar_read(brms_fit_group_multiAnnual_aggregated)
 # meta <- tar_read(nbw_meta_raw)
-# chosen_dyadic_sexes <- c('Male_Male')
-# chosen_dyadic_sexes <- c('Female-Juvenile_Female-Juvenile')
+# chosen_dyadic_sexes <- c('F-F', 'F-M', 'F-Unk', 'M-M', 'M-Unk', 'Unk-Unk')
 
-
+##### FJ!!!
 
 
 generate_dyadic_sex <- function(A, B, meta) {
+  
+  # # diagnostic test
+  # test_that("No NAs in sex metadata (should be specified as unknown)", {
+  #   expect_true(!any(is.na(meta$sex)))
+  # })
 
+  # extract individual sex classifications
   sexA <- meta[Title==A, as.character(unique(sex)),]
   sexB <- meta[Title==B, as.character(unique(sex)),]
-
-  if (is.na(sexA)) (sexA <- 'Unk')
-  if (is.na(sexB)) (sexB <- 'Unk')
-
+  
+  # paste sex classifications together
   dyadicSex <- paste(sort(c(sexA,sexB))[1], sort(c(sexA,sexB))[2], sep="_")
 
-  return(dyadicSex)
+  if (dyadicSex=='FemaleJ_FemaleJ') (dSex <- 'F-F')
+  if (dyadicSex=='FemaleJ_Male') (dSex <- 'F-M')
+  if (dyadicSex=='FemaleJ_Unknown') (dSex <- 'F-Unk')
+  if (dyadicSex=='Male_Male') (dSex <- 'M-M')
+  if (dyadicSex=='Male_Unknown') (dSex <- 'M-Unk')
+  if (dyadicSex=='Unknown_Unknown') (dSex <- 'Unk-Unk')
+
+  return(dSex)
 
 }
 # A <- '45'
@@ -1905,6 +1990,14 @@ combine_sex_modularity <- function(mod_mm, mod_ff) {
 # mod_ff <- tar_read(modularity_ff)
 
 
+# Calculate_CV ------------------------------------------------------------
+calculate_cv <- function(x) {
+  cv <- (sd(x)/mean(x)) # Note, not multiplying by 100
+  return(cv)
+}
+
+
+
 
 # Pull out edges
 edge_list_ma <- function(fit, include_zeros) {
@@ -1970,6 +2063,68 @@ edge_list_ma <- function(fit, include_zeros) {
 
 
 
+# Pull out edges
+edge_list_ma_agg <- function(fit, include_zeros) {
+  
+  # extract all edge samples
+  all_edge_samples <- data.frame(coef(fit, summary=FALSE)[[1]]) 
+  colnames(all_edge_samples) <- str_extract(colnames(all_edge_samples), "\\d+_\\d+\\.\\d+")
+  
+  # # extract year group and proper dyad names
+  d <- data.table(fit$data)
+  d[,year_group:=str_extract(dyad_annual, "(?<=-)[0-9]+$"), by=.I]
+  d[,dyad:=str_extract(dyad_annual, "^\\d+_\\d+"), by=.I]
+  
+  # year groups to loop through
+  years <- unique(d$year_group)
+  years <- years[!years %in% c(4, 18)] # exclude two years with just one dyad: 1991, 2009
+  
+  # number of draws
+  N_draws <- 100
+  
+  # randomly select draws to use in advance
+  chosen_draws <- sample(1:nrow(all_edge_samples), size = N_draws, replace = FALSE)
+  
+  # loop through years
+  for (y in years) {
+    
+    print(y)
+    
+    # identify non-zero dyads
+    y_data <- d[year_group==y,,]
+    y_data[,nAssociations:=sum_together,by=dyad]
+    nz_dyads <- y_data[sum_together>=1,unique(dyad),]
+    
+    # restrict to year of interest
+    edge_samples <- all_edge_samples[,(str_extract(colnames(all_edge_samples), "(?<=\\.)\\d+")==y)]
+    colnames(edge_samples) <- str_remove(colnames(edge_samples), "\\.\\d+")
+    
+    # apply transformation to all samples
+    edge_samples <- data.frame(lapply(edge_samples, inv_logit), check.names = FALSE)
+    
+    # extract edge list
+    edges <- data.table(data.frame(dyad=colnames(edge_samples),
+                                   edge=colMeans(edge_samples),
+                                   edge_sd=apply(edge_samples, 2, sd)))
+    
+    # add year_group to edge
+    edges$year_group <- y
+    
+    # exclude non-zero dyads if necessary
+    if (!include_zeros) (edges <- edges[dyad %in% nz_dyads,,])
+    
+    # build up output iteratively
+    if (exists('output')) (output <- rbindlist(list(output, edges)))
+    if (!exists('output')) (output <- edges)
+    
+  }
+  
+  return(output)
+  
+}
+# fit <- tar_read(brms_fit_group_multiAnnual_aggregated)
+# include_zeros <- FALSE
+
 
 plot_network <- function(edge_list, threshold, lwd, meta) {
 
@@ -1995,7 +2150,7 @@ plot_network <- function(edge_list, threshold, lwd, meta) {
   node_sex <- sex_vector[names(V(net))]
   V(net)$color <- ifelse(is.na(node_sex), adjustcolor("grey", alpha.f = .5),
                   ifelse(node_sex == "Male", adjustcolor(cols[1], alpha.f = .75),
-                         ifelse(node_sex == "Female-Juvenile", adjustcolor(cols[2], alpha.f = .75), "grey")))
+                         ifelse(node_sex == "FemaleJ", adjustcolor(cols[2], alpha.f = .75), "grey")))
 
   # add weights adjust edge visuals
   E(net)$weight <- plot_edges$edge
@@ -2036,6 +2191,107 @@ compare_BIC_plot <- function(fits, label) {
 # fits <- tar_read(ff_mixtures)
 # label <- 'F-F'
 
+
+
+# Imputation for mixture model datasets -----------------------------------
+impute_k_dataset <- function(dt, M) {
+  
+  # create empty vector
+  data_list <- vector("list", M)
+  
+  # loop through to create each new dataset
+  for (m in seq_len(M)) {
+    
+    # create partial dataset 
+    partial <- copy(dt)
+    partial[,likely.k:=NULL,] # remove top assignment ("likely.k" column)
+    
+    # sample likely.k in proportion to the various probabilities
+    partial[, likely.k:=factor(sample(x=c('1', '2', '3'), size=1, replace=TRUE,prob=c(pk1,pk2,pk3)), 
+                               levels=c('1','2','3')),by=.I]
+    
+    # save as single imputed dataset
+    data_list[[m]] <- as.data.frame(partial)
+    
+  }
+  
+  return(data_list)
+  
+}
+# dt <- tar_read(k_data_ff)
+# M <- 5 # number of imputed datasets to create
+
+
+
+# Build dataframe from mixture model results ------------------------------
+build_k_dataset <- function(k_model, dt_to_merge) {
+  
+  # Extract results from mixture model
+  k_df <- unique(data.table(by_edge(k_model$all.models[[3]])))
+  
+  # Merge onto dataframe with edges and dyadic predictors
+  merged <- merge(dt_to_merge, k_df, by.x='dyad', by.y='edge.id')
+  
+  # Fix up names
+  merged$pk1 <- merged$`P(k1)`
+  merged$pk2 <- merged$`P(k2)`
+  merged$pk3 <- merged$`P(k3)`
+  merged[,c('P(k1)','P(k2)','P(k3)'):=NULL,]
+  
+  # Dirichlet doesn't play well with 0s -- add a tiny constant
+  merged[pk1==0.0, pk1:=0.000001,]
+  merged[pk2==0.0, pk2:=0.000001,]
+  merged[pk3==0.0, pk3:=0.000001,]
+  
+  # Normalize so probabilities add up to EXACTLY 1
+  # merged[, `:=`(
+  #   pk1 = pk1 / (pk1 + pk2 + pk3),
+  #   pk2 = pk2 / (pk1 + pk2 + pk3),
+  #   pk3 = pk3 / (pk1 + pk2 + pk3)
+  # )]
+  merged[, s := pk1 + pk2 + pk3]
+  merged[, `:=`(
+    pk1 = pk1 / s,
+    pk2 = pk2 / s,
+    pk3 = pk3 / s
+  )]
+  merged[, s := NULL]
+  
+  # Scale key variables
+  merged[, ageDiff_scaled:=scale(ageDiff), ]
+  
+  return(merged)
+  
+}
+# k_model <- tar_read(mm_mixtures)
+# dt_to_merge <- tar_read(edges_df_group)
+
+
+
+
+# Combine fits from brms_multiple -----------------------------------------
+combine_fits <- function(multiple) {
+  
+  # extract draws from each model
+  draws_list <- lapply(multiple, as_draws_df)
+  
+  # row-bind them to make one pooled posterior
+  pooled_draws <- do.call(rbind, draws_list)
+  
+  return(pooled_draws)
+  
+}
+# multiple <- tar_read(mk_res_all_multiple)
+
+# multiple <- tar_read(mk_Age_mm_multiple)
+
+# describe_posterior(combine_fits(tar_read(mk_Age_mm_multiple)))
+# describe_posterior(combine_fits(tar_read(mk_Age_fm_multiple)))
+# describe_posterior(combine_fits(tar_read(mk_Age_ff_multiple)))
+# 
+# describe_posterior(combine_fits(tar_read(mk_res_mm_multiple)))
+# describe_posterior(combine_fits(tar_read(mk_res_fm_multiple)))
+# describe_posterior(combine_fits(tar_read(mk_res_ff_multiple)))
 
 
 print('Cleared functions')
